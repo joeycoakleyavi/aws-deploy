@@ -229,176 +229,176 @@ Resources:
       Region: !Ref "AWS::Region"
       VPC: !Ref pVPCId
 
-  # LambdaExecutionPolicyAmiLookup:
-  #   Type: AWS::IAM::ManagedPolicy
-  #   Properties:
-  #     Path: "/"
-  #     PolicyDocument:
-  #       Version: "2012-10-17"
-  #       Statement:
-  #         - Sid: ec2
-  #           Effect: Allow
-  #           Action: [
-  #             'ec2:DescribeImages',
-  #             'ec2:RunInstances'
-  #           ]
-  #           Resource: '*'
-  #         - Sid: log
-  #           Effect: Allow
-  #           Action:
-  #             - logs:CreateLogGroup
-  #             - logs:CreateLogStream
-  #             - logs:PutLogEvents
-  #           Resource: arn:aws:logs:*:*:*
+  LambdaExecutionPolicyAmiLookup:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Path: "/"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ec2
+            Effect: Allow
+            Action: [
+              'ec2:DescribeImages',
+              'ec2:RunInstances'
+            ]
+            Resource: '*'
+          - Sid: log
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
 
-  # LambdaExecutionRoleAmiLookup:
-  #   Type: 'AWS::IAM::Role'
-  #   Properties:
-  #     ManagedPolicyArns: [
-  #       !Ref LambdaExecutionPolicyAmiLookup
-  #     ]
-  #     AssumeRolePolicyDocument:
-  #       Statement:
-  #         - Action:
-  #             - 'sts:AssumeRole'
-  #           Effect: Allow
-  #           Principal:
-  #             Service:
-  #               - "lambda.amazonaws.com"
-  #     Path: /
+  LambdaExecutionRoleAmiLookup:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns: [
+        !Ref LambdaExecutionPolicyAmiLookup
+      ]
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+      Path: /
 
-  # LambdaAMILookup:
-  #   Type: AWS::Lambda::Function
-  #   Properties:
-  #     Description: AMI Lookup Lambda Function
-  #     Handler: index.lambda_handler
-  #     Role: !GetAtt LambdaExecutionRoleAmiLookup.Arn
-  #     Runtime: python3.8
-  #     Timeout: 5
-  #     Code:
-  #       ZipFile: |
-  #         #!/usr/bin/python
-  #         import boto3
-  #         import botocore.exceptions
-  #         import re
-  #         import cfnresponse
+  LambdaAMILookup:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: AMI Lookup Lambda Function
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRoleAmiLookup.Arn
+      Runtime: python3.8
+      Timeout: 5
+      Code:
+        ZipFile: |
+          #!/usr/bin/python
+          import boto3
+          import botocore.exceptions
+          import re
+          import cfnresponse
 
-  #         ec2 = boto3.client('ec2')
+          ec2 = boto3.client('ec2')
 
-  #         class AmiNotFound(Exception):
-  #             pass
-  #         class OptInRequired(Exception):
-  #             pass
+          class AmiNotFound(Exception):
+              pass
+          class OptInRequired(Exception):
+              pass
 
-  #         def get_avi_version(ami):
-  #             '''
-  #             Pulls Avi Version out of an AMI Name
-  #             '''
-  #             regex = re.compile('\d+\.\d+\.\d+', re.IGNORECASE)
-  #             m = regex.search(ami['Name'])
-  #             return m.group() if m else None
+          def get_avi_version(ami):
+              '''
+              Pulls Avi Version out of an AMI Name
+              '''
+              regex = re.compile('\d+\.\d+\.\d+', re.IGNORECASE)
+              m = regex.search(ami['Name'])
+              return m.group() if m else None
 
-  #         def get_latest_ami_by_major_version(major_version, image_list):
-  #             '''
-  #             Get the latest version of a major release. I.E. if 20.x is specified and 20.1.1 - 20.1.6
-  #             are available, choose 20.1.6
+          def get_latest_ami_by_major_version(major_version, image_list):
+              '''
+              Get the latest version of a major release. I.E. if 20.x is specified and 20.1.1 - 20.1.6
+              are available, choose 20.1.6
 
-  #             Acceptable values as of 12/2021: Latest 18.x, Latest 20.x, Latest 21.x
-  #             '''
+              Acceptable values as of 12/2021: Latest 18.x, Latest 20.x, Latest 21.x
+              '''
 
-  #             major_version_num = major_version.split(' ')[1].split('.')[0]
-  #             result = { 'Ami': '', 'Version': ''}
+              major_version_num = major_version.split(' ')[1].split('.')[0]
+              result = { 'Ami': '', 'Version': ''}
 
-  #             for image in image_list:
-  #                 version = get_avi_version(image)
-  #                 if version and version.startswith(major_version_num):
-  #                     if not result['Ami']:
-  #                         result['Ami'] = image['ImageId']
-  #                         result['Version'] = version
-  #                     elif version > result['Version']:
-  #                         result['Ami'] = image['ImageId']
-  #                         result['Version'] = version
-  #                     else:
-  #                         pass
+              for image in image_list:
+                  version = get_avi_version(image)
+                  if version and version.startswith(major_version_num):
+                      if not result['Ami']:
+                          result['Ami'] = image['ImageId']
+                          result['Version'] = version
+                      elif version > result['Version']:
+                          result['Ami'] = image['ImageId']
+                          result['Version'] = version
+                      else:
+                          pass
 
-  #             if not result['Ami']:
-  #                 raise AmiNotFound("No AMI could be found with the specified parameters")
+              if not result['Ami']:
+                  raise AmiNotFound("No AMI could be found with the specified parameters")
 
-  #             return result
+              return result
 
-  #         def get_ami_by_version_number(version_number, image_list):
-  #             result = { 'Ami': '', 'Version': '' }
-  #             for image in image_list:
-  #                 version = get_avi_version(image)
-  #                 if version and version_number in version:
-  #                     result['Ami'] = image['ImageId']
-  #                     result['Version'] = version_number
-  #                     return result
-  #             raise AmiNotFound("No AMI could be found with the specified parameters")
+          def get_ami_by_version_number(version_number, image_list):
+              result = { 'Ami': '', 'Version': '' }
+              for image in image_list:
+                  version = get_avi_version(image)
+                  if version and version_number in version:
+                      result['Ami'] = image['ImageId']
+                      result['Version'] = version_number
+                      return result
+              raise AmiNotFound("No AMI could be found with the specified parameters")
 
-  #         def test_ami_permissions(ami, event, context):
-  #             try:
-  #                 response = ec2.run_instances(
-  #                     ImageId=ami,
-  #                     InstanceType='m5.2xlarge',
-  #                     DryRun=True,
-  #                     MaxCount=1,
-  #                     MinCount=1
-  #                 )
-  #             except botocore.exceptions.ClientError as e:
-  #                 if e.response['Error'].get('Code') == 'DryRunOperation':
-  #                     pass
-  #                 elif e.response['Error'].get('Code') == 'OptInRequired':
-  #                     cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': 'Product is not subscribed to in the AWS Marketplace.'})
-  #                 else:
-  #                     cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': 'Unknown exception when testing AMI permissions'})
+          def test_ami_permissions(ami, event, context):
+              try:
+                  response = ec2.run_instances(
+                      ImageId=ami,
+                      InstanceType='m5.2xlarge',
+                      DryRun=True,
+                      MaxCount=1,
+                      MinCount=1
+                  )
+              except botocore.exceptions.ClientError as e:
+                  if e.response['Error'].get('Code') == 'DryRunOperation':
+                      pass
+                  elif e.response['Error'].get('Code') == 'OptInRequired':
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': 'Product is not subscribed to in the AWS Marketplace.'})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': 'Unknown exception when testing AMI permissions'})
 
-  #         response = ec2.describe_images(
-  #             Filters=[
-  #                 {
-  #                     "Name": "product-code",
-  #                     "Values": [
-  #                         "a9e7i60gidrc5x9nd7z3qyjj5"
-  #                     ]
-  #                 },
-  #                 {
-  #                     "Name": "state",
-  #                     "Values": [
-  #                         "available"
-  #                         ]
-  #                 }
-  #             ]
-  #         )
-  #         print(response)
-  #         images = response['Images']
+          response = ec2.describe_images(
+              Filters=[
+                  {
+                      "Name": "product-code",
+                      "Values": [
+                          "a9e7i60gidrc5x9nd7z3qyjj5"
+                      ]
+                  },
+                  {
+                      "Name": "state",
+                      "Values": [
+                          "available"
+                          ]
+                  }
+              ]
+          )
+          print(response)
+          images = response['Images']
 
-  #         def lambda_handler(event, context):
-  #             requested_image_version = event['ResourceProperties']['VersionRequested']
-  #             responseData = {}
-  #             print('Event Received \n {}'.format(event))
+          def lambda_handler(event, context):
+              requested_image_version = event['ResourceProperties']['VersionRequested']
+              responseData = {}
+              print('Event Received \n {}'.format(event))
 
-  #             try:
-  #                 if event['RequestType'] == 'Delete':
-  #                     print('Delete Event Requested')
-  #                     return(cfnresponse.send(event, context, cfnresponse.SUCCESS, {}))
+              try:
+                  if event['RequestType'] == 'Delete':
+                      print('Delete Event Requested')
+                      return(cfnresponse.send(event, context, cfnresponse.SUCCESS, {}))
 
-  #                 if "Latest" in requested_image_version:
-  #                     responseData = get_latest_ami_by_major_version(requested_image_version, images)
-  #                 else:
-  #                     responseData = get_ami_by_version_number(requested_image_version, images)
+                  if "Latest" in requested_image_version:
+                      responseData = get_latest_ami_by_major_version(requested_image_version, images)
+                  else:
+                      responseData = get_ami_by_version_number(requested_image_version, images)
                   
-  #             except Exception:
-  #                 responseData = {}
-  #                 responseData['Error'] = 'Execution error when performing AMI lookup. Please check logs'
-  #                 response = cfnresponse.send(event, context, cfnresponse.FAILED, responseData)
+              except Exception:
+                  responseData = {}
+                  responseData['Error'] = 'Execution error when performing AMI lookup. Please check logs'
+                  response = cfnresponse.send(event, context, cfnresponse.FAILED, responseData)
                             
-  #             cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
 
-  # AMIInfo:
-  #   Type: Custom::AMIInfo
-  #   Properties:
-  #     ServiceToken: !GetAtt LambdaAMILookup.Arn
-  #     VersionRequested: !Ref pAviVantageVersion
+  AMIInfo:
+    Type: Custom::AMIInfo
+    Properties:
+      ServiceToken: !GetAtt LambdaAMILookup.Arn
+      VersionRequested: !Ref pAviVantageVersion
 
   AviControllerLT:
     Type: AWS::EC2::LaunchTemplate
@@ -407,7 +407,7 @@ Resources:
       LaunchTemplateData: 
         IamInstanceProfile: 
           Arn: !GetAtt AviControllerInstanceProfile.Arn
-        ImageId: ami-0e9abf680279c64b0
+        ImageId: !GetAtt AMIInfo.Ami
         InstanceType: !Ref pInstanceType
         UserData:
           'Fn::Base64':
@@ -460,7 +460,7 @@ Resources:
                 "META":{
                   "upgrade_mode":true,
                   "version":{
-                      "Version":"21.1.3"
+                      "Version":"${AMIInfo.Version}"
                   }
                 },
                 "InitialConfiguration":[
